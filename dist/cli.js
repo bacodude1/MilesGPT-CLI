@@ -281,16 +281,16 @@ async function streamChat(config, model_id, messages) {
     }
 }
 async function startChat(config, context, model_id) {
+    ensureDirs();
+    const banner = figlet_1.default.textSync("MilesGPT", { font: "3x5" });
+    console.log("\n" + banner.split('\n').map(line => chalk_1.default.cyan(line)).join('\n'));
+    console.log(chalk_1.default.dim("your local AI, your rules\n"));
     const history = readHistory();
-    if (!context && history?.context) {
+    if (history?.context) {
         console.log(chalk_1.default.yellow("✓ Resumed session from " + new Date(history.last_session).toLocaleString()));
         context = history.context;
         model_id = history.model_id || model_id;
     }
-    console.log();
-    console.log(chalk_1.default.cyan(figlet_1.default.textSync("MilesGPT", { font: "3x5" })));
-    console.log(chalk_1.default.dim("your local AI, your rules"));
-    console.log();
     const systemPrompt = "You are MilesGPT, an AI assistant with full access to this machine. When you need to read a file or directory, write a bash code block with the command (e.g. ls, cat, find) and it will be executed automatically and the output fed back to you. Do not claim you cannot access files — use bash commands to access them.";
     let messagesList = [];
     console.log(chalk_1.default.dim("--- Type /help for commands ---"));
@@ -493,42 +493,35 @@ async function startChat(config, context, model_id) {
     chatLoop().catch(console.error);
 }
 async function login() {
-    const rl = (0, readline_1.createInterface)({
-        input: process.stdin,
-        output: process.stdout
-    });
+    const rl = (0, readline_1.createInterface)({ input: process.stdin, output: process.stdout });
     const question = (query) => {
         return new Promise((resolve) => {
             rl.question(query, (ans) => resolve(ans));
         });
     };
-    console.log(chalk_1.default.dim("\nTip: Set MILESGPT_SERVER_URL and MILESGPT_TOKEN env vars to skip login\n"));
-    let serverUrl = await question(chalk_1.default.bold("OpenWebUI Server URL [https://ai.huntermilesdesign.work]: ")) || "https://ai.huntermilesdesign.work";
+    ensureDirs();
+    let serverUrl = await question("OpenWebUI Server URL [https://ai.huntermilesdesign.work]: ") || "https://ai.huntermilesdesign.work";
     if (!serverUrl.endsWith("/"))
         serverUrl += "/";
-    const username = await question("Username/Email: ");
-    console.log();
+    const username = await question("Email: ");
+    const password = await question("Password: ");
     try {
-        const password = await question("Password: ");
-        console.log(chalk_1.default.dim(`\nRequest URL: ${serverUrl}api/v1/auths/signin`));
-        console.log(chalk_1.default.dim(`Request Body: {"email": "${username}", "password": "[REDACTED]"}`));
-        console.log(chalk_1.default.dim('Headers: {"Content-Type": "application/json"}'));
         const baseUrl = serverUrl.replace(/\/$/, '');
         const response = await (0, node_fetch_1.default)(`${baseUrl}/api/v1/auths/signin`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: username, password })
         });
-        console.log(chalk_1.default.dim(`\nResponse Status: ${response.status}`));
-        const data = await response.json();
-        if (!data || !(data.token || data.access_token)) {
-            console.log(JSON.stringify(data, null, 2));
-            console.log(chalk_1.default.red("✗ Login failed"));
-            return;
+        if (response.status === 200) {
+            const data = await response.json();
+            const token = (data.token || data.access_token);
+            const name = (data.name || username);
+            saveConfig({ server_url: serverUrl, token });
+            console.log(chalk_1.default.green(`✓ Welcome, ${name}!`));
         }
-        const token = (data.token || data.access_token);
-        saveConfig({ server_url: serverUrl, token });
-        console.log(chalk_1.default.green("✓ Login successful!"));
+        else {
+            console.log(chalk_1.default.red("✗ Login failed"));
+        }
     }
     catch (e) {
         console.log(chalk_1.default.red(`✗ Cannot connect to server: ${e.message}`));
@@ -562,10 +555,10 @@ async function main() {
         console.log(chalk_1.default.dim("\nNot logged in. Please run 'milesgpt login' first."));
         process.exit(1);
     }
-    const banner = await figlet_1.default.textSync("MilesGPT", { font: "3x5" });
-    console.log();
-    banner.split('\n').forEach(line => console.log(chalk_1.default.cyan(line)));
-    console.log(chalk_1.default.dim("your local AI, your rules"));
+    ensureDirs();
+    const banner = figlet_1.default.textSync("MilesGPT", { font: "3x5" });
+    console.log("\n" + banner.split('\n').map(line => chalk_1.default.cyan(line)).join('\n'));
+    console.log(chalk_1.default.dim("your local AI, your rules\n"));
     const history = readHistory();
     let context = [];
     let model_id = config.model_id;
