@@ -282,9 +282,6 @@ async function streamChat(config, model_id, messages) {
 }
 async function startChat(config, context, model_id) {
     ensureDirs();
-    const banner = figlet_1.default.textSync("MilesGPT", { font: "3x5" });
-    console.log("\n" + banner.split('\n').map(line => chalk_1.default.cyan(line)).join('\n'));
-    console.log(chalk_1.default.dim("your local AI, your rules\n"));
     const history = readHistory();
     if (history?.context) {
         console.log(chalk_1.default.yellow("✓ Resumed session from " + new Date(history.last_session).toLocaleString()));
