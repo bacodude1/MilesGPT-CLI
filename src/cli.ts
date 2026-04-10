@@ -5,6 +5,19 @@ process.on('uncaughtException', (err) => console.error('Uncaught:', err));
 import { createInterface } from "readline";
 import figlet from "figlet";
 import fetch, { RequestInit } from "node-fetch";
+
+const TIMEOUT = 120000;
+
+async function timeoutFetch(url: string, options: RequestInit): Promise<any> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT);
+  
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 import chalk from "chalk";
 import * as fs from "fs";
 import * as path from "path";
@@ -238,19 +251,25 @@ async function streamChat(
     };
     
     const baseUrl = config.server_url.replace(/\/$/, '');
-    const response = await fetch(`${baseUrl}/api/v1/chat/completions`, body);
+    const response = await timeoutFetch(`${baseUrl}/api/v1/chat/completions`, body);
     
     if (response.status !== 200) {
-      console.log(chalk.red(`✗ Error: ${response.status}`));
+      let errorMsg = `✗ Error: ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMsg += `\n${JSON.stringify(errorData, null, 2)}`;
+      } catch {}
+      console.log(chalk.red(errorMsg));
       return { response: null };
     }
+
     
     let fullResponse = "";
     const decoder = new TextDecoder();
     
     if (response.body) {
-      response.body.on('data', (chunk: Buffer) => {
-        const line = decoder.decode(chunk);
+      for await (const chunk of response.body as any) {
+        const line = decoder.decode(chunk, { stream: true });
         
         for (const l of line.split('\n')) {
           if (!l || l === "data: [DONE]") continue;
@@ -265,9 +284,7 @@ async function streamChat(
             } catch {}
           }
         }
-      });
-      
-      await new Promise((resolve) => response.body!.on('end', resolve));
+      }
     }
     
     process.stdout.write("\r".padEnd(15));
@@ -497,22 +514,22 @@ case "/login":
           default:
             messagesList = [{ role: "system", content: systemPrompt }, ...messagesList, { role: "user", content: input }];
             
-            const result = await streamChat(config, model_id || "default-model", messagesList);
-            
-            if (result.response) {
-              console.log(chalk.bold("\n"));
-              console.log(result.response);
-              
-              const { processedResponse, updatedMessages } = await processBashBlocksWithResponse(
-                result.response, 
-                messagesList,
-                config,
-                model_id || "default-model"
-              );
-              messagesList = updatedMessages;
-            } else {
-              console.log(chalk.red("Could not get response."));
-            }
+const result = await streamChat(config, model_id || "default-model", messagesList);
+
+              if (result.response) {
+                console.log(chalk.bold("\n"));
+                console.log(result.response);
+                
+                const { processedResponse, updatedMessages } = await processBashBlocksWithResponse(
+                  result.response, 
+                  messagesList,
+                  config,
+                  model_id || "default-model"
+                );
+                messagesList = updatedMessages;
+              } else {
+                console.log(chalk.yellow("Try again or check if your model is loaded in LM Studio."));
+              }
         }
         
         input = await question(chalk.green("> "));

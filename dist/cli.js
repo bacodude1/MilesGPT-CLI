@@ -41,6 +41,17 @@ process.on('uncaughtException', (err) => console.error('Uncaught:', err));
 const readline_1 = require("readline");
 const figlet_1 = __importDefault(require("figlet"));
 const node_fetch_1 = __importDefault(require("node-fetch"));
+const TIMEOUT = 120000;
+async function timeoutFetch(url, options) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT);
+    try {
+        return await (0, node_fetch_1.default)(url, { ...options, signal: controller.signal });
+    }
+    finally {
+        clearTimeout(timeoutId);
+    }
+}
 const chalk_1 = __importDefault(require("chalk"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
@@ -243,16 +254,22 @@ async function streamChat(config, model_id, messages) {
             })
         };
         const baseUrl = config.server_url.replace(/\/$/, '');
-        const response = await (0, node_fetch_1.default)(`${baseUrl}/api/v1/chat/completions`, body);
+        const response = await timeoutFetch(`${baseUrl}/api/v1/chat/completions`, body);
         if (response.status !== 200) {
-            console.log(chalk_1.default.red(`✗ Error: ${response.status}`));
+            let errorMsg = `✗ Error: ${response.status}`;
+            try {
+                const errorData = await response.json();
+                errorMsg += `\n${JSON.stringify(errorData, null, 2)}`;
+            }
+            catch { }
+            console.log(chalk_1.default.red(errorMsg));
             return { response: null };
         }
         let fullResponse = "";
         const decoder = new TextDecoder();
         if (response.body) {
-            response.body.on('data', (chunk) => {
-                const line = decoder.decode(chunk);
+            for await (const chunk of response.body) {
+                const line = decoder.decode(chunk, { stream: true });
                 for (const l of line.split('\n')) {
                     if (!l || l === "data: [DONE]")
                         continue;
@@ -267,8 +284,7 @@ async function streamChat(config, model_id, messages) {
                         catch { }
                     }
                 }
-            });
-            await new Promise((resolve) => response.body.on('end', resolve));
+            }
         }
         process.stdout.write("\r".padEnd(15));
         console.log();
@@ -477,7 +493,7 @@ async function startChat(config, context, model_id) {
                             messagesList = updatedMessages;
                         }
                         else {
-                            console.log(chalk_1.default.red("Could not get response."));
+                            console.log(chalk_1.default.yellow("Try again or check if your model is loaded in LM Studio."));
                         }
                 }
                 input = await question(chalk_1.default.green("> "));
