@@ -562,6 +562,10 @@ async function main() {
         console.log(chalk_1.default.dim("\nNot logged in. Please run 'milesgpt login' first."));
         process.exit(1);
     }
+    const banner = await figlet_1.default.textSync("MilesGPT", { font: "3x5" });
+    console.log();
+    banner.split('\n').forEach(line => console.log(chalk_1.default.cyan(line)));
+    console.log(chalk_1.default.dim("your local AI, your rules"));
     const history = readHistory();
     let context = [];
     let model_id = config.model_id;

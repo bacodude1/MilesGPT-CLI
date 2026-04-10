@@ -610,6 +610,11 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   
+  const banner = await figlet.textSync("MilesGPT", { font: "3x5" });
+  console.log();
+  banner.split('\n').forEach(line => console.log(chalk.cyan(line)));
+  console.log(chalk.dim("your local AI, your rules"));
+  
   const history = readHistory();
   let context: any[] = [];
   let model_id = config.model_id;
