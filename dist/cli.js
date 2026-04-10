@@ -69,41 +69,58 @@ function executeBashCommand(command) {
         });
     });
 }
-async function executeBashCommandWithSudo(command) {
-    const rl = (0, readline_1.createInterface)({ input: process.stdin, output: process.stdout });
-    let originalStdoutWrite = process.stdout.write.bind(process.stdout);
-    process.stdout.write = (str) => {
-        if (str !== "\r" && str !== "\n")
-            return true;
-        return originalStdoutWrite(str);
-    };
-    const password = await new Promise((resolve) => {
-        rl.question("", (ans) => {
-            process.stdout.write = originalStdoutWrite;
-            rl.close();
-            resolve(ans);
-        });
-    });
-    const sudoCommand = `echo ${password} | sudo -S ${command}`;
-    return new Promise((resolve) => {
-        (0, child_process_1.exec)(sudoCommand, (error, stdout, stderr) => {
-            let output = "";
-            if (stdout)
-                output += stdout;
-            if (stderr)
-                output += stderr;
-            resolve(output.trim());
-        });
-    });
-}
 async function executeBashCommandWithRetry(command) {
-    const output = await executeBashCommand(command);
-    if (output.includes("Permission denied") || output.includes("not in the sudoers file")) {
-        console.log(chalk_1.default.yellow("\nThis command requires sudo. Enter your password (hidden):"));
-        const sudoOutput = await executeBashCommandWithSudo(command);
-        return sudoOutput;
+    let execResult;
+    const tryExec = (cmd, password) => {
+        return new Promise((resolve) => {
+            if (password) {
+                const sudoProc = require('child_process').spawn('sudo', ['-S']);
+                let stdout = '';
+                let stderr = '';
+                sudoProc.stdout.on('data', (data) => { stdout += data.toString(); });
+                sudoProc.stderr.on('data', (data) => { stderr += data.toString(); });
+                sudoProc.stdin.write(password + '\n');
+                sudoProc.stdin.end(cmd + '\n');
+                sudoProc.on('close', () => {
+                    resolve({ stdout, stderr, exitCode: 0 });
+                });
+            }
+            else {
+                (0, child_process_1.exec)(cmd, (error, stdOut, stdErr) => {
+                    resolve({
+                        stdout: stdOut || '',
+                        stderr: stdErr || '',
+                        exitCode: error?.code ?? 0
+                    });
+                });
+            }
+        });
+    };
+    execResult = await tryExec(command);
+    if (execResult.stderr.includes("Permission denied") || execResult.stderr.includes("EACCES")) {
+        const rl = (0, readline_1.createInterface)({ input: process.stdin, output: process.stdout });
+        let originalStdoutWrite = process.stdout.write.bind(process.stdout);
+        process.stdout.write = (str) => {
+            if (str !== "\r" && str !== "\n")
+                return true;
+            return originalStdoutWrite(str);
+        };
+        console.log(chalk_1.default.yellow("\nEnter sudo password: "));
+        const password = await new Promise((resolve) => {
+            rl.question("", (ans) => {
+                process.stdout.write = originalStdoutWrite;
+                rl.close();
+                resolve(ans);
+            });
+        });
+        execResult = await tryExec(command, password);
     }
-    return output;
+    let output = "";
+    if (execResult.stdout)
+        output += execResult.stdout;
+    if (execResult.stderr)
+        output += execResult.stderr;
+    return output.trim();
 }
 async function processBashBlocks(response) {
     const bashRegex = /```(?:bash|sh)\n([\s\S]*?)```/g;
