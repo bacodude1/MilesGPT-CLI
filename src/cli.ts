@@ -35,6 +35,46 @@ function executeBashCommand(command: string): Promise<string> {
   });
 }
 
+async function executeBashCommandWithSudo(command: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+
+  let originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  process.stdout.write = (str) => {
+    if (str !== "\r" && str !== "\n") return true;
+    return originalStdoutWrite(str);
+  };
+
+  const password = await new Promise<string>((resolve) => {
+    rl.question("", (ans) => {
+      process.stdout.write = originalStdoutWrite;
+      rl.close();
+      resolve(ans);
+    });
+  });
+
+  const sudoCommand = `echo ${password} | sudo -S ${command}`;
+  return new Promise((resolve) => {
+    exec(sudoCommand, (error, stdout, stderr) => {
+      let output = "";
+      if (stdout) output += stdout;
+      if (stderr) output += stderr;
+      resolve(output.trim());
+    });
+  });
+}
+
+async function executeBashCommandWithRetry(command: string): Promise<string> {
+  const output = await executeBashCommand(command);
+
+  if (output.includes("Permission denied") || output.includes("not in the sudoers file")) {
+    console.log(chalk.yellow("\nThis command requires sudo. Enter your password (hidden):"));
+    const sudoOutput = await executeBashCommandWithSudo(command);
+    return sudoOutput;
+  }
+
+  return output;
+}
+
 async function processBashBlocks(response: string): Promise<string> {
   const bashRegex = /```(?:bash|sh)\n([\s\S]*?)```/g;
   let match;
@@ -53,10 +93,12 @@ async function processBashBlocks(response: string): Promise<string> {
     
     if (answer === "y") {
       console.log(chalk.dim(`\n> ${command}\n`));
-      const output = await executeBashCommand(command);
+      const output = await executeBashCommandWithRetry(command);
       if (output) {
         console.log('Output:', chalk.green(output));
         response += `\n\n<command-output>\n${chalk.green(output)}\n</command-output>`;
+      } else {
+        console.log(chalk.dim("No output."));
       }
     } else {
       console.log(chalk.dim("Skipped."));
@@ -89,7 +131,7 @@ async function processBashBlocksWithResponse(
     
     if (answer === "y") {
       console.log(chalk.dim(`\n> ${command}\n`));
-      const output = await executeBashCommand(command);
+      const output = await executeBashCommandWithRetry(command);
       if (output) {
         console.log('Output:', chalk.green(output));
         
@@ -102,6 +144,8 @@ async function processBashBlocksWithResponse(
           console.log(result.response);
           messagesList.push({ role: "assistant", content: result.response });
         }
+      } else {
+        console.log(chalk.dim("No output."));
       }
     } else {
       console.log(chalk.dim("Skipped."));
