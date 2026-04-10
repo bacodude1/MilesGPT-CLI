@@ -563,24 +563,17 @@ console.log(chalk.dim("\nTip: Set MILESGPT_SERVER_URL and MILESGPT_TOKEN env var
     });
     
     console.log(chalk.dim(`\nResponse Status: ${response.status}`));
-    const responseText = await response.text();
-    console.log(chalk.dim("Response Body:"));
-    try {
-      const jsonBody = JSON.parse(responseText);
-      console.log(JSON.stringify(jsonBody, null, 2));
-    } catch {
-      console.log(responseText);
+    const data = await response.json();
+    
+    if (!data || !((data as any).token || (data as any).access_token)) {
+      console.log(JSON.stringify(data, null, 2));
+      console.log(chalk.red("✗ Login failed"));
+      return;
     }
     
-    if (response.status === 200) {
-      const data = await response.json();
-      const token = ((data as any).token || (data as any).access_token) as string;
-      
-      saveConfig({ server_url: serverUrl, token });
-      console.log(chalk.green("✓ Login successful!"));
-    } else {
-      console.log(chalk.red(`✗ Login failed: ${response.status}`));
-    }
+    const token = ((data as any).token || (data as any).access_token) as string;
+    saveConfig({ server_url: serverUrl, token });
+    console.log(chalk.green("✓ Login successful!"));
   } catch (e: any) {
     console.log(chalk.red(`✗ Cannot connect to server: ${e.message}`));
   } finally {

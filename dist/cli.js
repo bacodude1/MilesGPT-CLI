@@ -520,24 +520,15 @@ async function login() {
             body: JSON.stringify({ email: username, password })
         });
         console.log(chalk_1.default.dim(`\nResponse Status: ${response.status}`));
-        const responseText = await response.text();
-        console.log(chalk_1.default.dim("Response Body:"));
-        try {
-            const jsonBody = JSON.parse(responseText);
-            console.log(JSON.stringify(jsonBody, null, 2));
+        const data = await response.json();
+        if (!data || !(data.token || data.access_token)) {
+            console.log(JSON.stringify(data, null, 2));
+            console.log(chalk_1.default.red("✗ Login failed"));
+            return;
         }
-        catch {
-            console.log(responseText);
-        }
-        if (response.status === 200) {
-            const data = await response.json();
-            const token = (data.token || data.access_token);
-            saveConfig({ server_url: serverUrl, token });
-            console.log(chalk_1.default.green("✓ Login successful!"));
-        }
-        else {
-            console.log(chalk_1.default.red(`✗ Login failed: ${response.status}`));
-        }
+        const token = (data.token || data.access_token);
+        saveConfig({ server_url: serverUrl, token });
+        console.log(chalk_1.default.green("✓ Login successful!"));
     }
     catch (e) {
         console.log(chalk_1.default.red(`✗ Cannot connect to server: ${e.message}`));
