@@ -2,6 +2,9 @@
   "name": "milesgpt-cli",
   "version": "1.0.0",
   "description": "MilesGPT - Modern terminal chat for OpenWebUI",
+  "files": [
+    "dist"
+  ],
   "main": "dist/cli.js",
   "bin": {
     "milesgpt": "dist/cli.js"
