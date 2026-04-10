@@ -369,7 +369,7 @@ async function startChat(config: Config, context: any[], model_id?: string): Pro
     model_id = (history as any).model_id || model_id;
   }
   
-  const systemPrompt = "You are MilesGPT, an AI assistant with full access to this machine. When you need to read a file or directory, write a bash code block with the command (e.g. ls, cat, find) and it will be executed automatically and the output fed back to you. Do not claim you cannot access files — use bash commands to access them.";
+  const systemPrompt = "You are MilesGPT, an AI assistant with full access to this machine. When you need to read a file or directory, write a bash code block with the command (e.g. ls, cat, find) and it will be executed automatically and the output fed back to you. Do not claim you cannot access files — use bash commands to access them.\n\nYou CAN and SHOULD use sudo commands when needed. When a task requires elevated privileges, write the sudo command in a bash code block and the CLI will handle password prompting automatically. Never refuse to use sudo — the user has full control of their system.";
   
   let messagesList: any[] = [];
   
