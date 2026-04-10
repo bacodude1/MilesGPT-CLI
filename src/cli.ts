@@ -37,21 +37,21 @@ function executeBashCommand(command: string): Promise<string> {
 
 async function executeBashCommandWithRetry(command: string): Promise<string> {
   let execResult: any;
-  
+
   const tryExec = (cmd: string, password?: string): Promise<any> => {
     return new Promise((resolve) => {
       if (password) {
         const sudoProc = require('child_process').spawn('sudo', ['-S']);
-        
+
         let stdout = '';
         let stderr = '';
-        
+
         sudoProc.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
         sudoProc.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
 
         sudoProc.stdin.write(password + '\n');
         sudoProc.stdin.end(cmd + '\n');
-        
+
         sudoProc.on('close', () => {
           resolve({ stdout, stderr, exitCode: 0 });
         });
@@ -69,7 +69,7 @@ async function executeBashCommandWithRetry(command: string): Promise<string> {
 
   execResult = await tryExec(command);
 
-  if (execResult.stderr.includes("Permission denied") || execResult.stderr.includes("EACCES")) {
+  if (execResult.stderr.toLowerCase().includes("permission denied") || execResult.stderr.includes("EACCES")) {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
 
     let originalStdoutWrite = process.stdout.write.bind(process.stdout);
@@ -78,8 +78,8 @@ async function executeBashCommandWithRetry(command: string): Promise<string> {
       return originalStdoutWrite(str);
     };
 
-    console.log(chalk.yellow("\nEnter sudo password: "));
-    
+    console.log(chalk.yellow("\nThis command needs sudo. Enter password: "));
+
     const password = await new Promise<string>((resolve) => {
       rl.question("", (ans) => {
         process.stdout.write = originalStdoutWrite;
@@ -94,7 +94,9 @@ async function executeBashCommandWithRetry(command: string): Promise<string> {
   let output = "";
   if (execResult.stdout) output += execResult.stdout;
   if (execResult.stderr) output += execResult.stderr;
-  
+
+  console.log(output.trim());
+
   return output.trim();
 }
 
@@ -117,12 +119,7 @@ async function processBashBlocks(response: string): Promise<string> {
     if (answer === "y") {
       console.log(chalk.dim(`\n> ${command}\n`));
       const output = await executeBashCommandWithRetry(command);
-      if (output) {
-        console.log('Output:', chalk.green(output));
-        response += `\n\n<command-output>\n${chalk.green(output)}\n</command-output>`;
-      } else {
-        console.log(chalk.dim("No output."));
-      }
+      response += `\n\n<command-output>\n${chalk.green(output)}\n</command-output>`;
     } else {
       console.log(chalk.dim("Skipped."));
     }
@@ -152,23 +149,18 @@ async function processBashBlocksWithResponse(
       });
     });
     
-    if (answer === "y") {
+if (answer === "y") {
       console.log(chalk.dim(`\n> ${command}\n`));
       const output = await executeBashCommandWithRetry(command);
-      if (output) {
-        console.log('Output:', chalk.green(output));
-        
-        messagesList.push({ role: "user", content: 'Command output:\n' + output });
-        
-        const result = await streamChat(config, model_id, messagesList);
-        
-        if (result.response) {
-          console.log(chalk.bold("\n"));
-          console.log(result.response);
-          messagesList.push({ role: "assistant", content: result.response });
-        }
-      } else {
-        console.log(chalk.dim("No output."));
+
+      messagesList.push({ role: "user", content: 'Command output:\n' + output });
+      
+      const result = await streamChat(config, model_id, messagesList);
+      
+      if (result.response) {
+        console.log(chalk.bold("\n"));
+        console.log(result.response);
+        messagesList.push({ role: "assistant", content: result.response });
       }
     } else {
       console.log(chalk.dim("Skipped."));
