@@ -3,7 +3,7 @@ Your local AI, your rules.
 
 ## Install
 ```bash
-npm install -g milesgpt-cli
+npm install -g https://github.com/bacodude1/milesgpt-cli
 ```
 
 ## Usage
