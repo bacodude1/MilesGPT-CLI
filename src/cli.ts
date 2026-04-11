@@ -468,8 +468,6 @@ switch (cmd) {
               break;
             
           case "/model":
-   currentModel = model_id || "default-model";
-  
    const baseUrl = config.server_url.replace(/\/$/, '');
    const modelResponse: any = await timeoutFetch(`${baseUrl}/api/models`, {
      headers: { "Authorization": `Bearer ${config.token}` }
@@ -629,8 +627,8 @@ case "/login":
             process.exit(0);
             
 default:
-            currentModel = model_id || "default-model";
-            messagesList = [{ role: "system", content: systemPrompt }, ...messagesList, { role: "user", content: input }];
+console.log(chalk.dim(`[Using model: ${currentModel}]`));
+             messagesList = [{ role: "system", content: systemPrompt }, ...messagesList, { role: "user", content: input }];
 
 const result = await streamChat(config, currentModel, messagesList);
 
