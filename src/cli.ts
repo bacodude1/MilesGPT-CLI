@@ -117,8 +117,11 @@ async function processBashBlocks(response: string): Promise<string> {
     });
     
     if (answer === "y") {
-      console.log(chalk.dim(`\n> ${command}\n`));
+      console.log(chalk.yellow(`$ ${command}\n`));
       const output = await executeBashCommandWithRetry(command);
+      if (output) {
+        console.log(chalk.gray(output));
+      }
       response += `\n\n<command-output>\n${chalk.green(output)}\n</command-output>`;
     } else {
       console.log(chalk.dim("Skipped."));
@@ -139,7 +142,7 @@ async function processBashBlocksWithResponse(
   
   while ((match = bashRegex.exec(response)) !== null) {
     const command = match[1].trim();
-    console.log(chalk.yellow(`\nCommand: ${command} Run this command? (y/n): `));
+    console.log(chalk.yellow(`$ ${command} Run this command? (y/n): `));
     
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     const answer = await new Promise<string>((resolve) => {
@@ -294,8 +297,12 @@ async function streamChat(
   messages: any[]
 ): Promise<{ response: string | null }> {
   try {
-    console.log("Thinking...");
-    
+    let dotCount = 0;
+    const spinnerInterval = setInterval(() => {
+      process.stdout.write(`\r${chalk.gray("Thinking" + ".".repeat(dotCount % 4))}   `);
+      dotCount++;
+    }, 250);
+
     const body: RequestInit = {
       method: "POST",
       headers: {
@@ -312,11 +319,14 @@ async function streamChat(
     const baseUrl = config.server_url.replace(/\/$/, '');
     const response = await timeoutFetch(`${baseUrl}/api/v1/chat/completions`, body);
     
+    clearInterval(spinnerInterval);
+    process.stdout.write("\r                          \r");
+
     if (response.status !== 200) {
-      let errorMsg = `✗ Error: ${response.status}`;
+      let errorMsg = chalk.red("✗ Error: ") + response.status;
       try {
         const errorData = await response.json();
-        errorMsg += `\n${JSON.stringify(errorData, null, 2)}`;
+        errorMsg += "\n" + JSON.stringify(errorData, null, 2);
       } catch {}
       console.log(chalk.red(errorMsg));
       return { response: null };
@@ -346,8 +356,8 @@ async function streamChat(
       }
     }
     
-    process.stdout.write("\r".padEnd(15));
     console.log();
+
     
     fullResponse = fullResponse.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
     
@@ -372,8 +382,21 @@ async function startChat(config: Config, context: any[], model_id?: string): Pro
   const systemPrompt = "You are MilesGPT, an AI assistant with full access to this machine. When you need to read a file or directory, write a bash code block with the command (e.g. ls, cat, find) and it will be executed automatically and the output fed back to you. Do not claim you cannot access files — use bash commands to access them.\n\nYou CAN and SHOULD use sudo commands when needed. When a task requires elevated privileges, write the sudo command in a bash code block and the CLI will handle password prompting automatically. Never refuse to use sudo — the user has full control of their system.";
   
   let messagesList: any[] = [];
+
+  const banner = figlet.textSync("MilesGPT", { font: "3x5" });
+  console.log();
+  const colors = [chalk.cyan, chalk.blue, chalk.blueBright];
+  banner.split('\n').forEach((line, i) => {
+    if (line.trim()) {
+      const colorIndex = Math.floor((i / banner.split('\n').length) * colors.length);
+      console.log(colors[Math.min(colorIndex, colors.length - 1)](line));
+    }
+  });
+  console.log(chalk.dim("your local AI, your rules\n"));
   
-  console.log(chalk.dim("--- Type /help for commands ---"));
+  console.log(chalk.gray("─────────────────────────────────────────────\n"));
+
+  let currentModel = model_id || "default-model";
   
   async function question(query: string): Promise<string> {
     const rl = createInterface({
@@ -381,11 +404,53 @@ async function startChat(config: Config, context: any[], model_id?: string): Pro
       output: process.stdout
     });
     return new Promise((resolve) => {
-      rl.question(query, (ans) => {
+      rl.question(chalk.cyan.bold("❯ ") + query, (ans) => {
         rl.close();
         resolve(ans);
       });
     });
+  }
+
+  async function displayModelInfo(): Promise<void> {
+    try {
+      const baseUrl = config.server_url.replace(/\/$/, '');
+      const response: any = await timeoutFetch(`${baseUrl}/api/models`, {
+        headers: { "Authorization": `Bearer ${config.token}` }
+      });
+      
+      if (response.status === 200) {
+        const data = await response.json();
+        const models = Array.isArray((data as any).data) ? (data as any).data : [];
+        const currentModelInfo = models.find((m: any) => m.id === currentModel);
+        
+        if (currentModelInfo) {
+          console.log(chalk.dim(`  ◆ model: ${chalk.gray(currentModelInfo.name || currentModel)}\n`));
+        } else {
+          console.log(chalk.dim(`  ◆ model: ${chalk.gray(currentModel)}\n`));
+        }
+      } else {
+        console.log(chalk.dim(`  ◆ model: ${chalk.gray(currentModel)}\n`));
+      }
+    } catch {
+      console.log(chalk.dim(`  ◆ model: ${chalk.gray(currentModel)}\n`));
+    }
+  }
+
+  async function displayHelp(): Promise<void> {
+    const boxBorder = chalk.gray("┌───────────────────────────────────────┐");
+    const boxContent = (text: string) => chalk.gray("│ ") + text;
+    
+    console.log("\n" + boxBorder);
+    console.log(boxContent(chalk.bold("  Available Commands")));
+    console.log(chalk.gray("├───────────────────────────────────────┤"));
+    console.log(boxContent(chalk.yellow("  /login")   + " - Login to OpenWebUI server"));
+    console.log(boxContent(chalk.yellow("  /model")   + " - Switch models"));
+    console.log(boxContent(chalk.yellow("  /save")    + " - Save conversation"));
+    console.log(boxContent(chalk.yellow("  /load")    + " - Load conversation"));
+    console.log(boxContent(chalk.yellow("  /clear")   + " - Clear history"));
+    console.log(boxContent(chalk.yellow("  /memory")  + " - View/save memories"));
+    console.log(boxContent(chalk.yellow("  /quit")    + " - Exit program"));
+    console.log(boxBorder + "\n");
   }
   
   async function chatLoop(): Promise<void> {
@@ -399,19 +464,14 @@ async function startChat(config: Config, context: any[], model_id?: string): Pro
         
         switch (cmd) {
           case "/help":
-            console.log(chalk.bold("\nAvailable Commands:"));
-            console.log(chalk.yellow("  /login    - Login to OpenWebUI server"));
-            console.log(chalk.yellow("  /model    - Switch to a different model"));
-            console.log(chalk.yellow("  /save     - Save current conversation"));
-            console.log(chalk.yellow("  /load     - Load a saved conversation"));
-            console.log(chalk.yellow("  /clear    - Clear conversation history"));
-            console.log(chalk.yellow("  /memory   - View/save memories"));
-            console.log(chalk.yellow("  /quit     - Exit the program"));
-            break;
+              await displayHelp();
+              break;
             
           case "/model":
+  currentModel = model_id || "default-model";
+  
   const baseUrl = config.server_url.replace(/\/$/, '');
-  const modelResponse = await fetch(`${baseUrl}/api/models`, {
+  const modelResponse: any = await timeoutFetch(`${baseUrl}/api/models`, {
     headers: { "Authorization": `Bearer ${config.token}` }
   });
   
@@ -420,34 +480,39 @@ async function startChat(config: Config, context: any[], model_id?: string): Pro
     const models = Array.isArray((data as any).data) ? (data as any).data : [];
     
     if (models.length === 0) {
-      console.log(chalk.yellow("No models available."));
+      console.log(chalk.red("✗ No models available"));
       break;
     }
     
-    console.log(chalk.bold("\nAvailable Models:\n"));
+    console.log("\n" + chalk.bold("Available Models:"));
+    const boxBorder = chalk.gray("┌───────────────────────────────────────┐");
+    const boxContent = (text: string) => chalk.gray("│ ") + text;
+    
+    console.log(boxBorder);
     models.forEach((model: any, i: number) => {
       const num = chalk.cyan(`${i + 1}.`);
       const id = chalk.green(model.id);
       const name = model.name ? ` - ${chalk.dim(model.name)}` : '';
-      console.log(`  ${num} ${id}${name}`);
+      console.log(boxContent(`  ${num} ${id}${name}`));
     });
+    console.log(chalk.gray("└───────────────────────────────────────┘\n"));
     
-    const choice = await question("\nSelect a model number: ");
+    const choice = await question("Select a model number: ");
     const idx = parseInt(choice.trim()) - 1;
     
     if (idx >= 0 && idx < models.length) {
       const selectedModel = models[idx];
-      model_id = (selectedModel as any).id || null;
-      console.log(chalk.green(`✓ Switched to: ${model_id}`));
+      currentModel = (selectedModel as any).id || null;
+      console.log(chalk.green(`✓ Switched to: ${currentModel}`));
       
-      if (!model_id) {
+      if (!currentModel) {
         console.log(chalk.yellow("Warning: Selected model has no ID."));
       }
     } else {
       console.log(chalk.yellow("Invalid selection. No change made."));
     }
   } else {
-    console.log(chalk.yellow(`Failed to fetch models: ${modelResponse.status}`));
+    console.log(chalk.red(`✗ Failed to fetch models: ${modelResponse.status}`));
   }
   break;
             
@@ -456,7 +521,7 @@ async function startChat(config: Config, context: any[], model_id?: string): Pro
             const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
             const filename = `conversation-${timestamp}.json`;
             fs.writeFileSync(path.join(CONVERSATIONS_DIR, filename), 
-              JSON.stringify({ model: model_id, messagesList }, null, 2));
+              JSON.stringify({ model: currentModel, messagesList }, null, 2));
             console.log(chalk.green(`✓ Saved to ${filename}`));
             break;
             
@@ -464,7 +529,7 @@ async function startChat(config: Config, context: any[], model_id?: string): Pro
             ensureDirs();
             const files = fs.readdirSync(CONVERSATIONS_DIR).filter(f => f.endsWith(".json")).slice(-5);
             if (files.length === 0) {
-              console.log(chalk.yellow("No saved conversations."));
+              console.log(chalk.red("✗ No saved conversations"));
             } else {
               for (let i = 0; i < files.length; i++) {
                 console.log(`  ${i+1}. ${files[i]}`);
@@ -475,6 +540,7 @@ async function startChat(config: Config, context: any[], model_id?: string): Pro
                 try {
                   const data = JSON.parse(fs.readFileSync(path.join(CONVERSATIONS_DIR, files[idx]), "utf-8"));
                   messagesList = (data as any).messages || [];
+                  currentModel = (data as any).model || currentModel;
                   console.log(chalk.green("✓ Loaded conversation"));
                 } catch {}
               }
@@ -483,7 +549,7 @@ async function startChat(config: Config, context: any[], model_id?: string): Pro
             
           case "/clear":
             messagesList = [{ role: "system", content: systemPrompt }];
-            console.log(chalk.yellow("Conversation cleared."));
+            console.log(chalk.green("✓ Conversation cleared"));
             break;
             
           case "/memory":
@@ -528,13 +594,12 @@ case "/login":
             // Mask password in input
             process.stdout.write = originalStdoutWrite;
             
-            console.log("\n" + chalk.dim("  Authenticating..."));
-            let spinnerChar = 0;
-            const spinnerChars = ["|", "/", "-", "\\"];
+            console.log(chalk.dim("\n  Authenticating..."));
+            let dotCount = 0;
             const spinnerInterval = setInterval(() => {
-              process.stdout.write(`\r${chalk.gray("  ")} ${spinnerChars[spinnerChar % 4]} `);
-              spinnerChar++;
-            }, 100);
+              process.stdout.write(`\r${chalk.gray("  ")} ${chalk.bold("Authenticating" + ".".repeat(dotCount % 4))}   `);
+              dotCount++;
+            }, 250);
             
             try {
               const baseUrl = serverUrl.replace(/\/$/, '');
@@ -568,22 +633,32 @@ case "/login":
             
           case "/exit":
           case "/quit":
+            console.log(chalk.yellow("Session ended"));
             process.exit(0);
             
-          default:
+default:
+            currentModel = model_id || "default-model";
             messagesList = [{ role: "system", content: systemPrompt }, ...messagesList, { role: "user", content: input }];
-            
-const result = await streamChat(config, model_id || "default-model", messagesList);
+
+const result = await streamChat(config, currentModel, messagesList);
 
               if (result.response) {
                 console.log(chalk.bold("\n"));
-                console.log(result.response);
+                
+                const lines = result.response.split('\n');
+                lines.forEach(line => {
+                  console.log(chalk.gray("│ ") + chalk.cyan.dim(line));
+                });
+                
+                console.log(chalk.gray("─────────────────────────────────────────────\n"));
+                
+                await displayModelInfo();
                 
                 const { processedResponse, updatedMessages } = await processBashBlocksWithResponse(
                   result.response, 
                   messagesList,
                   config,
-                  model_id || "default-model"
+                  currentModel
                 );
                 messagesList = updatedMessages;
               } else {
@@ -591,7 +666,7 @@ const result = await streamChat(config, model_id || "default-model", messagesLis
               }
         }
         
-        input = await question(chalk.green("> "));
+        input = await question("");
       }
     } catch (e) {
       console.log(chalk.yellow("\nSession ended."));
