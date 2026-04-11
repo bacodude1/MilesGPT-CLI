@@ -404,7 +404,7 @@ async function startChat(config: Config, context: any[], model_id?: string): Pro
       output: process.stdout
     });
     return new Promise((resolve) => {
-      rl.question(chalk.cyan.bold("❯ ") + query, (ans) => {
+      rl.question(chalk.cyan.bold("> ") + query, (ans) => {
         rl.close();
         resolve(ans);
       });
@@ -462,40 +462,32 @@ async function startChat(config: Config, context: any[], model_id?: string): Pro
         const cmd = parts[0].trim().toLowerCase();
         const args = (parts.slice(1).join(" ").trim() || "") as string;
         
-        switch (cmd) {
+switch (cmd) {
           case "/help":
               await displayHelp();
               break;
             
           case "/model":
-  currentModel = model_id || "default-model";
+   currentModel = model_id || "default-model";
   
-  const baseUrl = config.server_url.replace(/\/$/, '');
-  const modelResponse: any = await timeoutFetch(`${baseUrl}/api/models`, {
-    headers: { "Authorization": `Bearer ${config.token}` }
-  });
-  
-  if (modelResponse.status === 200) {
-    const data = await modelResponse.json();
-    const models = Array.isArray((data as any).data) ? (data as any).data : [];
-    
-    if (models.length === 0) {
-      console.log(chalk.red("✗ No models available"));
-      break;
-    }
-    
-    console.log("\n" + chalk.bold("Available Models:"));
-    const boxBorder = chalk.gray("┌───────────────────────────────────────┐");
-    const boxContent = (text: string) => chalk.gray("│ ") + text;
-    
-    console.log(boxBorder);
-    models.forEach((model: any, i: number) => {
-      const num = chalk.cyan(`${i + 1}.`);
-      const id = chalk.green(model.id);
-      const name = model.name ? ` - ${chalk.dim(model.name)}` : '';
-      console.log(boxContent(`  ${num} ${id}${name}`));
-    });
-    console.log(chalk.gray("└───────────────────────────────────────┘\n"));
+   const baseUrl = config.server_url.replace(/\/$/, '');
+   const modelResponse: any = await timeoutFetch(`${baseUrl}/api/models`, {
+     headers: { "Authorization": `Bearer ${config.token}` }
+   });
+   
+   if (modelResponse.status === 200) {
+     const data = await modelResponse.json();
+     const models = Array.isArray((data as any).data) ? (data as any).data : [];
+     
+     if (models.length === 0) {
+       console.log(chalk.red("✗ No models available"));
+       break;
+     }
+     
+     console.log("\n" + chalk.bold("Available Models:"));
+     models.forEach((model: any, i: number) => {
+       console.log(`  ${chalk.cyan(`${i + 1}.`)} ${chalk.white(model.id)}${model.name ? ` - ${chalk.dim(model.name)}` : ''}`);
+     });
     
     const choice = await question("Select a model number: ");
     const idx = parseInt(choice.trim()) - 1;

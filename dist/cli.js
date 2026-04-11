@@ -380,7 +380,7 @@ async function startChat(config, context, model_id) {
             output: process.stdout
         });
         return new Promise((resolve) => {
-            rl.question(chalk_1.default.cyan.bold("❯ ") + query, (ans) => {
+            rl.question(chalk_1.default.cyan.bold("> ") + query, (ans) => {
                 rl.close();
                 resolve(ans);
             });
@@ -451,16 +451,9 @@ async function startChat(config, context, model_id) {
                                 break;
                             }
                             console.log("\n" + chalk_1.default.bold("Available Models:"));
-                            const boxBorder = chalk_1.default.gray("┌───────────────────────────────────────┐");
-                            const boxContent = (text) => chalk_1.default.gray("│ ") + text;
-                            console.log(boxBorder);
                             models.forEach((model, i) => {
-                                const num = chalk_1.default.cyan(`${i + 1}.`);
-                                const id = chalk_1.default.green(model.id);
-                                const name = model.name ? ` - ${chalk_1.default.dim(model.name)}` : '';
-                                console.log(boxContent(`  ${num} ${id}${name}`));
+                                console.log(`  ${chalk_1.default.cyan(`${i + 1}.`)} ${chalk_1.default.white(model.id)}${model.name ? ` - ${chalk_1.default.dim(model.name)}` : ''}`);
                             });
-                            console.log(chalk_1.default.gray("└───────────────────────────────────────┘\n"));
                             const choice = await question("Select a model number: ");
                             const idx = parseInt(choice.trim()) - 1;
                             if (idx >= 0 && idx < models.length) {
