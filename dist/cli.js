@@ -681,9 +681,6 @@ async function main() {
         process.exit(1);
     }
     ensureDirs();
-    const banner = figlet_1.default.textSync("MilesGPT", { font: "3x5" });
-    console.log("\n" + banner.split('\n').map(line => chalk_1.default.cyan(line)).join('\n'));
-    console.log(chalk_1.default.dim("your local AI, your rules\n"));
     const history = readHistory();
     let context = [];
     let model_id = config.model_id;
