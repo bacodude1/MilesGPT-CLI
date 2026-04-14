@@ -258,6 +258,10 @@ async function fetchDefaultModel(config) {
                 console.log(chalk_1.default.yellow("No models available."));
             }
         }
+        else if (response.status === 401) {
+            console.log(chalk_1.default.red("Authentication required. Please run: milesgpt login"));
+            process.exit(1);
+        }
         else {
             console.log(chalk_1.default.yellow(`Failed to fetch models: ${response.status}`));
         }
@@ -280,6 +284,10 @@ async function displayModels(config) {
             models.forEach((model, i) => {
                 console.log(`  ${i + 1}. ${chalk_1.default.cyan(model.id)} - ${(model.name || "No name")}`);
             });
+        }
+        else if (response.status === 401) {
+            console.log(chalk_1.default.red("Authentication required. Please run: milesgpt login"));
+            process.exit(1);
         }
         else {
             console.log(chalk_1.default.yellow(`Failed to fetch models: ${response.status}`));
@@ -466,6 +474,10 @@ async function startChat(config, context, model_id) {
                             else {
                                 console.log(chalk_1.default.yellow("Invalid selection. No change made."));
                             }
+                        }
+                        else if (modelResponse.status === 401) {
+                            console.log(chalk_1.default.red("Authentication required. Please run: milesgpt login"));
+                            process.exit(1);
                         }
                         else {
                             console.log(chalk_1.default.red(`✗ Failed to fetch models: ${modelResponse.status}`));
