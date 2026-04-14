@@ -313,7 +313,9 @@ async function streamChat(config, model_id, messages) {
             body: JSON.stringify({
                 model: model_id,
                 messages,
-                stream: true
+                stream: true,
+                max_tokens: config.max_tokens || 4096,
+                ...(config.num_ctx && { num_ctx: config.num_ctx })
             })
         };
         const baseUrl = config.server_url.replace(/\/$/, '');
@@ -431,6 +433,7 @@ async function startChat(config, context, model_id) {
         console.log(boxContent(chalk_1.default.yellow("  /load") + " - Load conversation"));
         console.log(boxContent(chalk_1.default.yellow("  /clear") + " - Clear history"));
         console.log(boxContent(chalk_1.default.yellow("  /memory") + " - View/save memories"));
+        console.log(boxContent(chalk_1.default.yellow("  /config") + " - Set max_tokens/num_ctx"));
         console.log(boxContent(chalk_1.default.yellow("  /quit") + " - Exit program"));
         console.log(boxBorder + "\n");
     }
@@ -525,6 +528,45 @@ async function startChat(config, context, model_id) {
                         else {
                             displayMemories();
                         }
+                        break;
+                    case "/config":
+                        const configRl = (0, readline_1.createInterface)({ input: process.stdin, output: process.stdout });
+                        const configQuestion = (query) => {
+                            return new Promise((resolve) => { configRl.question(query, (ans) => resolve(ans)); });
+                        };
+                        if (!args || args.toLowerCase() === "help") {
+                            console.log(chalk_1.default.cyan("\n  Config options:"));
+                            console.log(chalk_1.default.gray("    /config max_tokens <number>"));
+                            console.log(chalk_1.default.gray("    /config num_ctx <number>"));
+                            console.log(chalk_1.default.gray("\n  Current settings:") + chalk_1.default.dim(` max_tokens=${config.max_tokens || "not set"}, num_ctx=${config.num_ctx || "not set"}`) + "\n");
+                        }
+                        else {
+                            const [key, value] = args.split(/\s+/);
+                            if (key === "max_tokens") {
+                                config.max_tokens = parseInt(value, 10);
+                                if (!isNaN(config.max_tokens)) {
+                                    saveConfig(config);
+                                    console.log(chalk_1.default.green(`✓ max_tokens set to ${config.max_tokens}`));
+                                }
+                                else {
+                                    console.log(chalk_1.default.red("✗ Invalid number"));
+                                }
+                            }
+                            else if (key === "num_ctx") {
+                                config.num_ctx = parseInt(value, 10);
+                                if (!isNaN(config.num_ctx)) {
+                                    saveConfig(config);
+                                    console.log(chalk_1.default.green(`✓ num_ctx set to ${config.num_ctx}`));
+                                }
+                                else {
+                                    console.log(chalk_1.default.red("✗ Invalid number"));
+                                }
+                            }
+                            else {
+                                console.log(chalk_1.default.yellow(`Unknown option: ${key}. Try /config help`));
+                            }
+                        }
+                        configRl.close();
                         break;
                     case "/login":
                         const rl = (0, readline_1.createInterface)({ input: process.stdin, output: process.stdout });

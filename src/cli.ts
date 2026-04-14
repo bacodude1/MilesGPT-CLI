@@ -183,6 +183,8 @@ interface Config {
   server_url: string;
   token: string;
   model_id?: string;
+  max_tokens?: number;
+  num_ctx?: number;
 }
 
 function ensureDirs(): void {
@@ -318,7 +320,9 @@ async function streamChat(
       body: JSON.stringify({
         model: model_id,
         messages,
-        stream: true
+        stream: true,
+        max_tokens: config.max_tokens || 4096,
+        ...(config.num_ctx && { num_ctx: config.num_ctx })
       })
     };
     
@@ -455,6 +459,7 @@ async function startChat(config: Config, context: any[], model_id?: string): Pro
     console.log(boxContent(chalk.yellow("  /load")    + " - Load conversation"));
     console.log(boxContent(chalk.yellow("  /clear")   + " - Clear history"));
     console.log(boxContent(chalk.yellow("  /memory")  + " - View/save memories"));
+    console.log(boxContent(chalk.yellow("  /config")  + " - Set max_tokens/num_ctx"));
     console.log(boxContent(chalk.yellow("  /quit")    + " - Exit program"));
     console.log(boxBorder + "\n");
   }
@@ -559,7 +564,41 @@ switch (cmd) {
               displayMemories();
             }
             break;
-            
+
+          case "/config":
+            const configRl = createInterface({ input: process.stdin, output: process.stdout });
+            const configQuestion = (query: string): Promise<string> => {
+              return new Promise((resolve) => { configRl.question(query, (ans) => resolve(ans)); });
+            };
+            if (!args || args.toLowerCase() === "help") {
+              console.log(chalk.cyan("\n  Config options:"));
+              console.log(chalk.gray("    /config max_tokens <number>"));
+              console.log(chalk.gray("    /config num_ctx <number>"));
+              console.log(chalk.gray("\n  Current settings:") + chalk.dim(` max_tokens=${config.max_tokens || "not set"}, num_ctx=${config.num_ctx || "not set"}`) + "\n");
+            } else {
+              const [key, value] = args.split(/\s+/);
+              if (key === "max_tokens") {
+                config.max_tokens = parseInt(value, 10);
+                if (!isNaN(config.max_tokens)) {
+                  saveConfig(config);
+                  console.log(chalk.green(`✓ max_tokens set to ${config.max_tokens}`));
+                } else {
+                  console.log(chalk.red("✗ Invalid number"));
+                }
+              } else if (key === "num_ctx") {
+                config.num_ctx = parseInt(value, 10);
+                if (!isNaN(config.num_ctx)) {
+                  saveConfig(config);
+                  console.log(chalk.green(`✓ num_ctx set to ${config.num_ctx}`));
+                } else {
+                  console.log(chalk.red("✗ Invalid number"));
+                }
+              } else {
+                console.log(chalk.yellow(`Unknown option: ${key}. Try /config help`));
+              }
+            }
+            configRl.close();
+            break;
 case "/login":
             const rl = createInterface({ input: process.stdin, output: process.stdout });
             
